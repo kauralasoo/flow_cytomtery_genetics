@@ -1,0 +1,8 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+/data/fcs_files/*
+/data/combined_flowSet.rds
+.DS_Store
+flow_cytomtery_genetics.Rproj

@@ -1,4 +1,6 @@
 library("lme4")
+library("dplyr")
+library("ggplot2")
 
 #' Calculate the proportion of variance explaned by different factors in a lme4 model
 varianceExplained <- function(lmer_model){
@@ -43,13 +45,22 @@ ggplot(pca_df, aes(x = PC1, y = PC2, label = sample_id)) + geom_point() + geom_t
 outlier_samples = c("fafq_1_2015-10-16","iill_1_2015-10-20")
 flow_df_filtered = dplyr::filter(flow_df, !(sample_id %in% outlier_samples))
 
-
 #Quick variance component analysis
 #Estimate variance explained by different factors
 cd14_exp = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
 cd16_exp = lmer(CD16 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
 cd206_exp = lmer(CD206 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
 
+#Identify donors that have more than one measurement
+replicated_donors = dplyr::group_by(flow_df_filtered, line_id) %>% 
+  dplyr::summarise(n_replicates = length(line_id)) %>% 
+  dplyr::filter(n_replicates > 1)
+flow_df_replicated = dplyr::filter(flow_df_filtered, line_id %in% replicated_donors$line_id)
+
+#Repeat the variance component analysis
+cd14_exp = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
+cd16_exp = lmer(CD16 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
+cd206_exp = lmer(CD206 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
 
 
 

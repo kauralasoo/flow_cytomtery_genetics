@@ -20,6 +20,7 @@ line_medatada = readRDS("data/compiled_line_metadata.rds")
 channel_marker_map = data_frame(channel = c("APC.A","PE.A","Pacific.Blue.A"), 
                                 protein_name = c("CD206","CD16","CD14"))
 
+#Calculate intensity values
 unique_lines = dplyr::select(line_medatada, line_id, donor, genotype_id) %>% unique()
 flow_data = dplyr::left_join(flow_processed, channel_marker_map, by = "channel") %>%
   dplyr::mutate(donor = ifelse(donor == "fpdj", "nibo",donor)) %>% #fpdj and nibo are the same donors
@@ -33,8 +34,8 @@ intensity_matrix = dplyr::select(flow_data, line_id, genotype_id, flow_date, pro
   dplyr::mutate(sample_id = paste(line_id, as.character(flow_date), sep = "_"))
 
 #Make a matrix of flow data and perform PCA
-flow_matrix = as.matrix(flow_df[,c(4,5,6)])
-rownames(flow_matrix) = flow_df$sample_id
+flow_matrix = as.matrix(intensity_matrix[,c(4,5,6)])
+rownames(flow_matrix) = intensity_matrix$sample_id
 pca_res = prcomp(flow_matrix, scale = TRUE, center = TRUE)
 
 #Make a PCA plot
@@ -43,24 +44,36 @@ ggplot(pca_df, aes(x = PC1, y = PC2, label = sample_id)) + geom_point() + geom_t
 
 #Choose outliers based on PCA and remove them
 outlier_samples = c("fafq_1_2015-10-16","iill_1_2015-10-20")
-flow_df_filtered = dplyr::filter(flow_df, !(sample_id %in% outlier_samples))
+flow_df_filtered = dplyr::filter(intensity_matrix, !(sample_id %in% outlier_samples))
 
-#Quick variance component analysis
-#Estimate variance explained by different factors
-cd14_exp = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
-cd16_exp = lmer(CD16 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
-cd206_exp = lmer(CD206 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
+#Visualise CD14 expression by date of the experiment
+ggplot(flow_df_filtered, aes(x = as.factor(flow_date), y = CD14)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylab("CD14 flourecent intensity") +
+  xlab("Measurement date")
 
-#Identify donors that have more than one measurement
+#Visualise CD14 expression by cell line
+#To make it easier to see the effects, we should first keep only the cell lines that had more than one measurement
 replicated_donors = dplyr::group_by(flow_df_filtered, line_id) %>% 
   dplyr::summarise(n_replicates = length(line_id)) %>% 
   dplyr::filter(n_replicates > 1)
 flow_df_replicated = dplyr::filter(flow_df_filtered, line_id %in% replicated_donors$line_id)
 
+#We can now make the same plot, but group the intensities according to the line_id:
+ggplot(flow_df_replicated, aes(x = line_id, y = CD14)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylab("CD14 flourecent intensity") +
+  xlab("Name of the cell line")
+
+
+#Quick variance component analysis
+#Estimate variance explained by different factors
+cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
+
 #Repeat the variance component analysis
-cd14_exp = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
-cd16_exp = lmer(CD16 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
-cd206_exp = lmer(CD206 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
+cd14_variance_replicated = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
 
 
 

@@ -132,12 +132,24 @@ Finally, let's use the linear mixed model to estimate proportion of variance exp
 
 ```r
 cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
+cd14_variance
+```
+
+```
+##   type flow_date   line_id  Residual
+## 1 gene         0 0.6705885 0.3294115
 ```
 
 For sanity check, we can repeat the same analysis on the the subset of the data in which each line had at least two replicate samples (but some dates now had only a single measurement):
 
 ```r
 cd14_variance_replicated = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
+cd14_variance_replicated
+```
+
+```
+##   type flow_date   line_id  Residual
+## 1 gene         0 0.7351271 0.2648729
 ```
 
 

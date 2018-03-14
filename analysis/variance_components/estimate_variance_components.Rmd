@@ -122,11 +122,13 @@ Based on these plots, which one do you think explains more variation in the data
 Finally, let's use the linear mixed model to estimate proportion of variance explained by the date of the experiment (flow_date) an the the cell line from which the sample originated (line_id). 
 ```{r}
 cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
+cd14_variance
 ```
 
 For sanity check, we can repeat the same analysis on the the subset of the data in which each line had at least two replicate samples (but some dates now had only a single measurement):
 ```{r}
 cd14_variance_replicated = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_replicated) %>% varianceExplained()
+cd14_variance_replicated
 ```
 
 

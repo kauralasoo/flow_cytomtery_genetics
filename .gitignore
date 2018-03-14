@@ -6,3 +6,4 @@
 /data/combined_flowSet.rds
 .DS_Store
 flow_cytomtery_genetics.Rproj
+*.html

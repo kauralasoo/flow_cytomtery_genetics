@@ -89,6 +89,21 @@ outlier_samples = c("fafq_1_2015-10-16","iill_1_2015-10-20")
 flow_df_filtered = dplyr::filter(intensity_matrix, !(sample_id %in% outlier_samples))
 ```
 
+## General properties of the data
+###Hown many samples were measured on each date?
+```{r}
+date_count = dplyr::group_by(flow_df_filtered, flow_date) %>% 
+  dplyr::summarise(n_samples = length(flow_date))
+ggplot(date_count, aes(x = n_samples)) + geom_histogram(binwidth = 1)
+```
+
+###What is the number of replicates per cell line?
+```{r}
+date_count = dplyr::group_by(flow_df_filtered, line_id) %>% 
+  dplyr::summarise(n_replicates = length(line_id))
+ggplot(date_count, aes(x = n_replicates)) + geom_histogram(binwidth = 1)
+```
+
 ## Visualising sources of variation
 First, let's plot the CD14 flourecent intensity according to the date when the meaurement was performed.
 ```{r}

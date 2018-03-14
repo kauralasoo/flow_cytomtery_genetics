@@ -91,6 +91,27 @@ outlier_samples = c("fafq_1_2015-10-16","iill_1_2015-10-20")
 flow_df_filtered = dplyr::filter(intensity_matrix, !(sample_id %in% outlier_samples))
 ```
 
+## General properties of the data
+###Hown many samples were measured on each date?
+
+```r
+date_count = dplyr::group_by(flow_df_filtered, flow_date) %>% 
+  dplyr::summarise(n_samples = length(flow_date))
+ggplot(date_count, aes(x = n_samples)) + geom_histogram(binwidth = 1)
+```
+
+![](estimate_variance_components_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
+
+###What is the number of replicates per cell line?
+
+```r
+date_count = dplyr::group_by(flow_df_filtered, line_id) %>% 
+  dplyr::summarise(n_replicates = length(line_id))
+ggplot(date_count, aes(x = n_replicates)) + geom_histogram(binwidth = 1)
+```
+
+![](estimate_variance_components_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
+
 ## Visualising sources of variation
 First, let's plot the CD14 flourecent intensity according to the date when the meaurement was performed.
 
@@ -102,7 +123,7 @@ ggplot(flow_df_filtered, aes(x = as.factor(flow_date), y = CD14)) +
   xlab("Measurement date")
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
 
 Now, let's group the samples accoring to the cell line that the come from and redo the plot. To make the plot easier to read, we should first keep only the cell lines that had more than one sample.
 
@@ -123,7 +144,7 @@ ggplot(flow_df_replicated, aes(x = line_id, y = CD14)) +
   xlab("Name of the cell line")
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
 
 Based on these plots, which one do you think explains more variation in the data - the date of the experiment or the cell line which sample originated from?
 

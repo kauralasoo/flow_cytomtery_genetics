@@ -1,8 +1,20 @@
-# Variance component analysis
+---
+title: "Variance component analysis"
+output: 
+  html_document: 
+    keep_md: yes
+---
 
 
 
 
+```
+## Warning: package 'lme4' was built under R version 3.4.3
+```
+
+```
+## Warning: package 'tidyr' was built under R version 3.4.3
+```
 In this tutoral, we are going to used linear mixed models implemented in the lme4 R package to estimate the proportion of variance in the dataset that can be attributed to different experimental and biological factors. More concretely, we want to estimate what has large effect on CD14 cell surface expression in human iPSC-derived macrophages - the date when the measurement was made or the cell line from which the cells originated. 
 
 First, we need to load some packages that are used in the analysis.
@@ -173,4 +185,144 @@ cd14_variance_replicated
 ## 1 gene         0 0.7351271 0.2648729
 ```
 
+# Search for genetic variants that might explain donor variation
+
+Import genotype data
+
+```r
+genotypes = readRDS("../../data/genotypes/open_access_genotypes.rds")
+```
+
+Load necessary pacakges and functions
+
+```r
+library("MatrixEQTL")
+```
+
+```
+## Warning: package 'MatrixEQTL' was built under R version 3.4.3
+```
+
+```r
+source("../../analysis/functions/MatrixEQTL_wrapper.R")
+```
+
+Define the gene positions matrix
+
+```r
+gene_pos = data_frame(geneid = c("CD14", "CD16", "CD206"), chr = c("5","1","10"), left = c(140631728,161505430,17809344), right = c(140633701,161678654,17911170))
+```
+
+Prepare the flow data matrix
+
+```r
+#keep one sample per donor
+unique_donor = dplyr::group_by(intensity_matrix, genotype_id) %>%
+  dplyr::filter(row_number() == 1) %>% dplyr::ungroup()
+flow_matrix = t(unique_donor[,c("CD14","CD16","CD206")])
+colnames(flow_matrix) = unique_donor$genotype_id
+
+#Keep only those donors that have open access genotype data
+flow_matrix = flow_matrix[,colnames(genotypes$genotypes)]
+```
+
+Run MatrixEQTL
+
+```r
+results = runMatrixEQTL(flow_matrix, genotypes$genotypes, as.data.frame(genotypes$snpspos),
+                        as.data.frame(gene_pos), covariates = NULL, 
+                        cisDist = 2e5, pvOutputThreshold = 1, permute = FALSE, model = modelLINEAR)
+```
+
+```
+## Matching data files and location files
+```
+
+```
+## 3of3 genes matched
+```
+
+```
+## 6022of6022 SNPs matched
+```
+
+```
+## Task finished in 0.00399999999999956 seconds
+```
+
+```
+## Reordering SNPs
+```
+
+```
+## Task finished in 0.225000000000001 seconds
+```
+
+```
+## Reordering genes
+```
+
+```
+## Task finished in 0.194999999999999 seconds
+```
+
+```
+## Processing covariates
+```
+
+```
+## Task finished in 0 seconds
+```
+
+```
+## Processing gene expression data (imputation, residualization)
+```
+
+```
+## Task finished in 0.00200000000000067 seconds
+```
+
+```
+## Creating output file(s)
+```
+
+```
+## Task finished in 0.00800000000000001 seconds
+```
+
+```
+## Performing eQTL analysis
+```
+
+```
+## 14.28% done, 571 cis-eQTLs
+```
+
+```
+## 28.57% done, 1,186 cis-eQTLs
+```
+
+```
+## 42.85% done, 1,641 cis-eQTLs
+```
+
+```
+## 57.14% done, 1,727 cis-eQTLs
+```
+
+```
+## 71.42% done, 2,345 cis-eQTLs
+```
+
+```
+## 85.71% done, 2,722 cis-eQTLs
+```
+
+```
+## Task finished in 0.048 seconds
+```
+
+```
+## 
+```
 

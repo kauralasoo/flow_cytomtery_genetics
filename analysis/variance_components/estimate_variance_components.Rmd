@@ -146,4 +146,40 @@ cd14_variance_replicated = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_repl
 cd14_variance_replicated
 ```
 
+# Search for genetic variants that might explain donor variation
+
+Import genotype data
+```{r}
+genotypes = readRDS("../../data/genotypes/open_access_genotypes.rds")
+```
+
+Load necessary pacakges and functions
+```{r}
+library("MatrixEQTL")
+source("../../analysis/functions/MatrixEQTL_wrapper.R")
+```
+
+Define the gene positions matrix
+```{r}
+gene_pos = data_frame(geneid = c("CD14", "CD16", "CD206"), chr = c("5","1","10"), left = c(140631728,161505430,17809344), right = c(140633701,161678654,17911170))
+```
+
+Prepare the flow data matrix
+```{r}
+#keep one sample per donor
+unique_donor = dplyr::group_by(intensity_matrix, genotype_id) %>%
+  dplyr::filter(row_number() == 1) %>% dplyr::ungroup()
+flow_matrix = t(unique_donor[,c("CD14","CD16","CD206")])
+colnames(flow_matrix) = unique_donor$genotype_id
+
+#Keep only those donors that have open access genotype data
+flow_matrix = flow_matrix[,colnames(genotypes$genotypes)]
+```
+
+Run MatrixEQTL
+```{r}
+results = runMatrixEQTL(flow_matrix, genotypes$genotypes, as.data.frame(genotypes$snpspos),
+                        as.data.frame(gene_pos), covariates = NULL, 
+                        cisDist = 2e5, pvOutputThreshold = 1, permute = FALSE, model = modelLINEAR)
+```
 

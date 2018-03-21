@@ -1,3 +1,4 @@
+
 ---
 title: "Variance component analysis"
 output: 
@@ -5,6 +6,7 @@ output:
     keep_md: yes
 ---
 
+# Variance component analysis
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```

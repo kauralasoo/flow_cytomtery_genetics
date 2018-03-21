@@ -1,4 +1,3 @@
-
 ---
 title: "Variance component analysis"
 output: 

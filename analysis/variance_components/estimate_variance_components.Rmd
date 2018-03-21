@@ -9,13 +9,15 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, warning=F}
 suppressMessages(library("lme4"))
 suppressMessages(library("dplyr"))
 suppressMessages(library("tidyr"))
 suppressMessages(library("ggplot2"))
+suppressMessages(library("MatrixEQTL"))
 ```
-In this tutoral, we are going to used linear mixed models implemented in the lme4 R package to estimate the proportion of variance in the dataset that can be attributed to different experimental and biological factors. More concretely, we want to estimate what has large effect on CD14 cell surface expression in human iPSC-derived macrophages - the date when the measurement was made or the cell line from which the cells originated. 
+
+In this tutoral, we are going to used linear mixed models implemented in the lme4 R package to estimate the proportion of variance in the dataset that can be attributed to different experimental and biological factors. More concretely, we want to estimate what has larger effect on CD14 cell surface expression in human iPSC-derived macrophages - the date when the measurement was made or the cell line from which the cells originated? 
 
 First, we need to load some packages that are used in the analysis.
 ```{r}
@@ -134,7 +136,7 @@ ggplot(flow_df_replicated, aes(x = line_id, y = CD14)) +
 Based on these plots, which one do you think explains more variation in the data - the date of the experiment or the cell line which sample originated from?
 
 ## Variance component analysis
-Finally, let's use the linear mixed model to estimate proportion of variance explained by the date of the experiment (flow_date) an the the cell line from which the sample originated (line_id). 
+Finally, let's use linear mixed model to estimate proportion of variance explained by the date of the experiment (flow_date) and the cell line from which the sample originated (line_id). 
 ```{r}
 cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
 cd14_variance
@@ -147,24 +149,40 @@ cd14_variance_replicated
 ```
 
 # Search for genetic variants that might explain donor variation
+## Importing genotype data
+Observing that 67% of the variance in CD14 cell surface expression can be atributed to differences between cell lines raises an interesting question - are these differences genetic? To check that, we nee to first import the genotype data from these cell lines. To reduce the number of tests that we need to perform, we fill focus on commom genetic variants (minor allelele frequency > 5%) that are located near (<200 kilobases) to the genes coding for the three cell surface proteins (CD14 (CD14), FCGR2A/FCGR2B (CD16) and MRC1 (CD206)).
 
-Import genotype data
+Next, we can load the genotype matrix. The genotype data was initially stored in the VCF format and it was converted into an R matrix using the [this script](https://github.com/kauralasoo/flow_cytomtery_genetics/blob/master/analysis/preprocessing/importGenotypes.R).
 ```{r}
 genotypes = readRDS("../../data/genotypes/open_access_genotypes.rds")
 ```
+The command above loads in a list that has two components. The first one contains the coordinates of the genetic variants:
+```{r}
+head(genotypes$snpspos)
+```
+And the second one is a matrix that contain the genotypes (reference allele dosage) for each variant and cell line. If the reference allele is A and the alternate allele is T then individuals with AA genotype are represented with 2, individuals with AT genotype are represented by 1 and individuals with TT genotype are represented by 0.
+```{r}
+genotypes$genotypes[1:5,1:5]
+dim(genotypes$genotypes)
+```
 
-Load necessary pacakges and functions
+The genotype matrix contains data for 6022 variants in 39 cell lines. Although the genotype data for other cell lines is also available, it is not open access and cannot therefore be shared publicly.
+
+## Testing for genetic associations
+In the simplest scenario, testing for associations between genetic variants and a phenotype of interest (e.g. CD14 cell surface expression) is performed using linear regression. In R, this is usually done using the built in `lm` function. Although very powerful, `lm` can be prohibitively slow when we need to tests associations betweeb thousands of phenotypes (all expressed genes) and million of genetic variants. [MatrixEQTL](http://www.bios.unc.edu/research/genomic_software/Matrix_eQTL/) package has been developed to make these tests much faster. We first need to load the MatrixEQTL package and a conveniance wrapper function that I have a written myself.
+
 ```{r}
 library("MatrixEQTL")
 source("../../analysis/functions/MatrixEQTL_wrapper.R")
 ```
 
-Define the gene positions matrix
+Next, we need to define the genomic goordinates of the genes that code the CD14, CD16 and CD206 proteins:
 ```{r}
 gene_pos = data_frame(geneid = c("CD14", "CD16", "CD206"), chr = c("5","1","10"), left = c(140631728,161505430,17809344), right = c(140633701,161678654,17911170))
+gene_pos
 ```
 
-Prepare the flow data matrix
+Finally, we need to prepare the flow cytometry data for association testing. This involves retaining only one (randomly selected) measurement for each cell line and retaining only cell lines for which open access genotype data is available.
 ```{r}
 #keep one sample per donor
 unique_donor = dplyr::group_by(intensity_matrix, genotype_id) %>%
@@ -176,10 +194,55 @@ colnames(flow_matrix) = unique_donor$genotype_id
 flow_matrix = flow_matrix[,colnames(genotypes$genotypes)]
 ```
 
-Run MatrixEQTL
-```{r}
+With all of the data in place, we can finally run MatrixEQTL:
+```{r, results="hide", message=F, warning=F}
 results = runMatrixEQTL(flow_matrix, genotypes$genotypes, as.data.frame(genotypes$snpspos),
                         as.data.frame(gene_pos), covariates = NULL, 
                         cisDist = 2e5, pvOutputThreshold = 1, permute = FALSE, model = modelLINEAR)
 ```
 
+## Visualising genetic associations
+
+One way to visualise genetic associations is to use the Manhattan plot where the position of the genetic variant is on the x-axis and the -log10 association p-value between the genetic variant and the phenotype (e.g. CD14 fluorescent intensity) is on the y-axis To do this, we firs need to add variant coordinates to the MatrixEQTL results table and filter the CD14 results:
+```{r}
+  cd14_variants = dplyr::left_join(results$cis$eqtls, genotypes$snpspos, by = c("snps" = "snpid")) %>%
+  dplyr::filter(gene == "CD14")
+```
+
+Next, we can use ggplot2 to make the draw the Manhattan plot:
+```{r}
+ggplot(cd14_variants, aes(x = pos, y = -log(pvalue, 10))) + geom_point()
+```
+
+We can also see that the variant with the smallest association p-values is rs778587 (although because of linkage disequilibrium, four other variants have exactly the same p-value):
+```{r}
+head(cd14_variants)
+```
+
+# Revisiting variance compoent analysis
+Finally, we can check how incopororating the most associated genetic variant into the variance component analysis changes the results. Although the full genotype data is publicly available for only subset of the donors, we have added the genotypes of the lead CD14 variant (rs778587) for all of the donors into GitHub. First, let's import the genotypes and add them to the to flow dataset:
+
+```{r}
+cd14_lead_variant = read.table("../../data/genotypes/cd14_lead_variant.txt", header = TRUE, stringsAsFactors = FALSE)
+flow_df_genotype = dplyr::left_join(flow_df_filtered, cd14_lead_variant, by = "genotype_id")
+```
+
+Now, we can redo the variance component analysis and ask how much of the cell line specific variaition can be explained by the genetic variant that was most associated with CD14 expression.
+```{r}
+cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% varianceExplained()
+cd14_variance
+```
+
+As we can see, most of the variance previously atributed to cell line is now explained by the genotype of the rs778587 varaint. We can also directly plot CD14 expression against the genotype of the rs778587 variant:
+```{r}
+ggplot(flow_df_genotype, aes(x = factor(rs778587), y = CD14)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_point(position = position_jitter(width = 0.1, height = 0))
+```
+
+To make sure that this result is specific to CD14, we can also repeat the variance component analysis for CD16 and CD206:
+```{r}
+lmer(CD16 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% varianceExplained()
+lmer(CD206 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% varianceExplained()
+```
+As expected, the rs778587 variant near the CD14 gene does not explain any variation in the cell surface expression of CD16 and CD206 proteins.

@@ -10,9 +10,9 @@ output:
 
 
 
-In this tutoral, we are going to used linear mixed models implemented in the lme4 R package to estimate the proportion of variance in the dataset that can be attributed to different experimental and biological factors. More concretely, we want to estimate what has larger effect on CD14 cell surface expression in human iPSC-derived macrophages - the date when the measurement was made or the cell line from which the cells originated? 
+In this tutoral, we are going to use linear mixed models implemented in the lme4 R package to estimate the proportion of variance in a dataset that can be attributed to different experimental and biological factors. More concretely, we want to estimate which has larger effect on CD14 cell surface expression in human iPSC-derived macrophages - the date when the measurement was made or the cell line from which the cells originated? 
 
-First, we need to load some packages that are used in the analysis.
+First, we need to load the packages that are used in the analysis.
 
 ```r
 library("lme4")
@@ -21,7 +21,7 @@ library("tidyr")
 library("ggplot2")
 ```
 
-We also need to define a function that calculates the percentage of variance explained my each term in the linear mixed model. We will use it later:
+We also need to define a function that calculates the percentage of variance explained by each term in the linear mixed model. We will use it later:
 
 ```r
 #' Calculate the proportion of variance explaned by different factors in a lme4 model
@@ -44,7 +44,7 @@ flow_processed = readRDS("../../results/processed_flow_cytometry_data.rds")
 line_medatada = readRDS("../../data/compiled_line_metadata.rds")
 ```
 
-Next, we can map the flow cytometry channels to the three specfic proteins that were measured in the experiment (CD14, CD16 and CD206)
+Next, we can map the flow cytometry channels to the three proteins that were measured in the experiment (CD14, CD16 and CD206)
 
 ```r
 #Map flow cytometry channels to specifc proteins
@@ -75,7 +75,7 @@ intensity_matrix = dplyr::select(flow_data, line_id, genotype_id, flow_date, pro
 ```
 
 ## Detecting outliers
-We use principal component analysis to identify potential outlier samples:
+We can use principal component analysis to identify potential outlier samples:
 
 ```r
 #Make a matrix of flow data and perform PCA
@@ -90,7 +90,7 @@ ggplot(pca_df, aes(x = PC1, y = PC2, label = sample_id)) + geom_point() + geom_t
 
 ![](estimate_variance_components_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
 
-After closer inspection, it seems that there are two potential outlier samples. Let's remove those. Note that his step is somewhat subjective and you should make sure that you are not unintentionally skewing your results. One option is to rerun your analysis without removing outliers and checking how the results change.
+After closer inspection, it seems that there are two potential outlier samples. Let's remove those. Note that this step is somewhat subjective and you should make sure that you are not unintentionally skewing your results. One option is to rerun your analysis without removing outliers and checking how the results change.
 
 ```r
 #Choose outliers based on PCA and remove them
@@ -99,7 +99,7 @@ flow_df_filtered = dplyr::filter(intensity_matrix, !(sample_id %in% outlier_samp
 ```
 
 ## General properties of the data
-###Hown many samples were measured on each date?
+### Hown many samples were measured on each date?
 
 ```r
 date_count = dplyr::group_by(flow_df_filtered, flow_date) %>% 
@@ -109,7 +109,7 @@ ggplot(date_count, aes(x = n_samples)) + geom_histogram(binwidth = 1)
 
 ![](estimate_variance_components_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
 
-###What is the number of replicates per cell line?
+### What is the number of replicates per cell line?
 
 ```r
 date_count = dplyr::group_by(flow_df_filtered, line_id) %>% 
@@ -132,7 +132,7 @@ ggplot(flow_df_filtered, aes(x = as.factor(flow_date), y = CD14)) +
 
 ![](estimate_variance_components_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
 
-Now, let's group the samples accoring to the cell line that the come from and redo the plot. To make the plot easier to read, we should first keep only the cell lines that had more than one sample.
+Now, let's group the samples accoring to the cell line that they come from and redo the plot. To make the plot easier to read, we should keep only the cell lines that had more than one sample.
 
 ```r
 replicated_donors = dplyr::group_by(flow_df_filtered, line_id) %>% 
@@ -141,7 +141,7 @@ replicated_donors = dplyr::group_by(flow_df_filtered, line_id) %>%
 flow_df_replicated = dplyr::filter(flow_df_filtered, line_id %in% replicated_donors$line_id)
 ```
 
-We can now make the same plot, but group the intensities according to the line_id:
+Now, we can make the same plot as above, but group the intensities according to the line_id:
 
 ```r
 ggplot(flow_df_replicated, aes(x = line_id, y = CD14)) + 
@@ -153,10 +153,10 @@ ggplot(flow_df_replicated, aes(x = line_id, y = CD14)) +
 
 ![](estimate_variance_components_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
 
-Based on these plots, which one do you think explains more variation in the data - the date of the experiment or the cell line which sample originated from?
+Based on these plots, which one do you think explains more variation in the data - the date of the experiment or the cell line of origin?
 
 ## Variance component analysis
-Finally, let's use linear mixed model to estimate proportion of variance explained by the date of the experiment (flow_date) and the cell line from which the sample originated (line_id). 
+Finally, let's use linear mixed model to estimate proportion of variance explained by the date of the experiment (flow_date) and the cell line of origin (line_id). 
 
 ```r
 cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% varianceExplained()
@@ -182,7 +182,7 @@ cd14_variance_replicated
 
 # Search for genetic variants that might explain donor variation
 ## Importing genotype data
-Observing that 67% of the variance in CD14 cell surface expression can be atributed to differences between cell lines raises an interesting question - are these differences genetic? To check that, we nee to first import the genotype data from these cell lines. To reduce the number of tests that we need to perform, we fill focus on commom genetic variants (minor allelele frequency > 5%) that are located near (<200 kilobases) to the genes coding for the three cell surface proteins (CD14 (CD14), FCGR2A/FCGR2B (CD16) and MRC1 (CD206)).
+Observing that 67% of the variance in CD14 cell surface expression can be atributed to differences between cell lines raises an interesting question - are these differences genetic? To test that, we nee to first import the genotype data from these cell lines. To reduce the number of tests that we need to perform, we fill focus on commom genetic variants (minor allelele frequency > 5%) that are located near (<200 kilobases) to the genes coding for the three cell surface proteins (CD14 (CD14), FCGR2A/FCGR2B (CD16) and MRC1 (CD206)).
 
 Next, we can load the genotype matrix. The genotype data was initially stored in the VCF format and it was converted into an R matrix using the [this script](https://github.com/kauralasoo/flow_cytomtery_genetics/blob/master/analysis/preprocessing/importGenotypes.R).
 
@@ -285,7 +285,7 @@ results = runMatrixEQTL(flow_matrix, genotypes$genotypes, as.data.frame(genotype
 
 ## Visualising genetic associations
 
-One way to visualise genetic associations is to use the Manhattan plot where the position of the genetic variant is on the x-axis and the -log10 association p-value between the genetic variant and the phenotype (e.g. CD14 fluorescent intensity) is on the y-axis To do this, we firs need to add variant coordinates to the MatrixEQTL results table and filter the CD14 results:
+One way to visualise genetic associations is to use the Manhattan plot where the position of the genetic variant is on the x-axis and the -log10 association p-value between the genetic variant and the phenotype (e.g. CD14 fluorescent intensity) is on the y-axis. To do this, we first need to add variant coordinates to the MatrixEQTL results table and filter for CD14 results:
 
 ```r
   cd14_variants = dplyr::left_join(results$cis$eqtls, genotypes$snpspos, by = c("snps" = "snpid")) %>%
@@ -297,7 +297,7 @@ One way to visualise genetic associations is to use the Manhattan plot where the
 ## coercing into character vector
 ```
 
-Next, we can use ggplot2 to make the draw the Manhattan plot:
+Next, we can use ggplot2 to make the Manhattan plot:
 
 ```r
 ggplot(cd14_variants, aes(x = pos, y = -log(pvalue, 10))) + geom_point()
@@ -305,7 +305,7 @@ ggplot(cd14_variants, aes(x = pos, y = -log(pvalue, 10))) + geom_point()
 
 ![](estimate_variance_components_files/figure-html/unnamed-chunk-24-1.png)<!-- -->
 
-We can also see that the variant with the smallest association p-values is rs778587 (although because of linkage disequilibrium, four other variants have exactly the same p-value):
+We can see that the variant with the smallest association p-value is rs778587 (although because of linkage disequilibrium, four other variants have exactly the same p-value):
 
 ```r
 head(cd14_variants)

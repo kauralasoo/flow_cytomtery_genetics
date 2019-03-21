@@ -26,6 +26,7 @@ library("lme4")
 library("dplyr")
 library("tidyr")
 library("ggplot2")
+library("MatrixEQTL")
 ```
 
 We also need to define a function that calculates the percentage of variance explained by each term in the linear mixed model. We will use it later:
@@ -89,7 +90,8 @@ After closer inspection, it seems that there are two potential outlier samples. 
 ```{r}
 #Choose outliers based on PCA and remove them
 outlier_samples = c("fafq_1_2015-10-16","iill_1_2015-10-20")
-flow_df_filtered = dplyr::filter(intensity_matrix, !(sample_id %in% outlier_samples))
+flow_df_filtered = dplyr::filter(intensity_matrix, !(sample_id %in% outlier_samples)) %>%
+  dplyr::mutate(flow_date = as.factor(flow_date))
 ```
 
 ## General properties of the data
@@ -102,9 +104,9 @@ ggplot(date_count, aes(x = n_samples)) + geom_histogram(binwidth = 1)
 
 ### What is the number of replicates per cell line?
 ```{r}
-date_count = dplyr::group_by(flow_df_filtered, line_id) %>% 
+replicates_count = dplyr::group_by(flow_df_filtered, line_id) %>% 
   dplyr::summarise(n_replicates = length(line_id))
-ggplot(date_count, aes(x = n_replicates)) + geom_histogram(binwidth = 1)
+ggplot(replicates_count, aes(x = n_replicates)) + geom_histogram(binwidth = 1)
 ```
 
 ## Visualising sources of variation
@@ -149,6 +151,32 @@ cd14_variance_replicated = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_repl
 cd14_variance_replicated
 ```
 
+Variance explained by date only
+```{r}
+cd14_variance = lmer(CD14 ~ (1|flow_date), flow_df_filtered) %>% varianceExplained()
+cd14_variance
+```
+ 
+#Do we get similar estimates from the linear model?
+Effect of the cell line only
+```{r}
+lm_model = lm(CD14 ~ line_id, flow_df_filtered)
+summary(lm_model)$adj.r.squared
+```
+
+Effect of the experiment date only
+```{r}
+lm_model = lm(CD14 ~ flow_date, flow_df_filtered)
+summary(lm_model)$adj.r.squared
+```
+
+Both effecs in the same model.
+```{r}
+lm_model = lm(CD14 ~ flow_date + line_id, flow_df_filtered)
+summary(lm_model)
+```
+Note that in this case many of the parameters estimates are NAs, because the full model actually has more parameters than there are samples and so all of them cannot be estimated at the same time.
+
 # Search for genetic variants that might explain donor variation
 ## Importing genotype data
 Observing that 67% of the variance in CD14 cell surface expression can be atributed to differences between cell lines raises an interesting question - are these differences genetic? To test that, we nee to first import the genotype data from these cell lines. To reduce the number of tests that we need to perform, we fill focus on commom genetic variants (minor allelele frequency > 5%) that are located near (<200 kilobases) to the genes coding for the three cell surface proteins (CD14 (CD14), FCGR2A/FCGR2B (CD16) and MRC1 (CD206)).
@@ -170,7 +198,7 @@ dim(genotypes$genotypes)
 The genotype matrix contains data for 6022 variants in 39 cell lines. Although the genotype data for other cell lines is also available, it is not open access and cannot therefore be shared publicly.
 
 ## Testing for genetic associations
-In the simplest scenario, testing for associations between genetic variants and a phenotype of interest (e.g. CD14 cell surface expression) is performed using linear regression. In R, this is usually done using the built in `lm` function. Although very powerful, `lm` can be prohibitively slow when we need to tests associations betweeb thousands of phenotypes (all expressed genes) and million of genetic variants. [MatrixEQTL](http://www.bios.unc.edu/research/genomic_software/Matrix_eQTL/) package has been developed to make these tests much faster. We first need to load the MatrixEQTL package and a conveniance wrapper function that I have a written myself.
+In the simplest scenario, testing for associations between genetic variants and a phenotype of interest (e.g. CD14 cell surface expression) is performed using linear regression. In R, this is usually done using the built in `lm` function. Although very powerful, `lm` can be prohibitively slow when we need to test associations between thousands of phenotypes (all expressed genes) and millions of genetic variants. [MatrixEQTL](http://www.bios.unc.edu/research/genomic_software/Matrix_eQTL/) package has been developed to make these tests much faster. We first need to load the MatrixEQTL package and a conveniance wrapper function that I have a written myself.
 
 ```{r}
 library("MatrixEQTL")
@@ -228,6 +256,7 @@ cd14_lead_variant = read.table("../../data/genotypes/cd14_lead_variant.txt", hea
 flow_df_genotype = dplyr::left_join(flow_df_filtered, cd14_lead_variant, by = "genotype_id")
 ```
 
+
 Now, we can redo the variance component analysis and ask how much of the cell line specific variaition can be explained by the genetic variant that was most associated with CD14 expression.
 ```{r}
 cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% varianceExplained()
@@ -247,3 +276,91 @@ lmer(CD16 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% va
 lmer(CD206 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% varianceExplained()
 ```
 As expected, the rs778587 variant near the CD14 gene does not explain any variation in the cell surface expression of CD16 and CD206 proteins.
+
+# Testing genotype effect using the linear mixed model
+One of the main advantages of a linear mixed model is that we can include related samples into out analysis to increase statistical power.
+
+#Unique donors
+For comparison, let's first create a dataset in which each individual occurs only once. This dataset contains 97 samples:
+```{r}
+unique_df_genotype = dplyr::left_join(unique_donor, cd14_lead_variant, by = "genotype_id")
+unique_df_genotype
+```
+
+We can test the singificance of the genotype effect using both a liner model:
+```{r}
+m0 = lm(CD14 ~ 1, unique_df_genotype)
+m1 = lm(CD14 ~ rs778587, unique_df_genotype)
+#Likelihood ratio test:
+anova(m0, m1, test = "LRT")$`Pr(>Chi)`
+#F-test:
+anova(m0, m1)$`Pr(>F)`
+```
+Ideally, we should also take into account flow_date. 
+```{r}
+m0 = lm(CD14 ~ 1 + as.factor(flow_date), unique_df_genotype)
+m1 = lm(CD14 ~ rs778587 + as.factor(flow_date), unique_df_genotype)
+#Likelihood ratio test:
+anova(m0, m1, test = "LRT")$`Pr(>Chi)`
+#F-test:
+anova(m0, m1)$`Pr(>F)`
+```
+This reduced our power, because we now had to fit 31 parameters:
+```{r}
+length(m1$coefficients)
+```
+
+We can perform the same test using a linear mixed model with genotype as a fixed effect and flow_date as a random effect:
+```{r}
+length(m1$coefficients)
+```
+
+
+And a linear mixed model with flow_date as a random effect:
+```{r}
+m0 = lmer(CD14 ~ (1|flow_date), unique_df_genotype, REML = F)
+m1 = lmer(CD14 ~ rs778587 + (1|flow_date), unique_df_genotype, REML = F)
+#Likelihood ratio test:
+anova(m0, m1)$`Pr(>Chisq)`
+```
+
+## Repeated measurements from the same individual
+We can also use the full dataset containing 119 samples.
+```{r}
+flow_df_genotype
+```
+
+In this case we can fit a linear mixed model with genotype as a fixed effect and line_id and flow_date both as random effects.
+```{r}
+m0 = lmer(CD14 ~ (1|line_id) + (1|flow_date), flow_df_genotype, REML = F)
+m1 = lmer(CD14 ~ rs778587 + (1|line_id) + (1|flow_date), flow_df_genotype, REML = F)
+#Likelihood ratio test:
+anova(m0, m1)$`Pr(>Chisq)`
+```
+
+If we fit a simple linear model with only genotype as the fixed effect we get supiciously high p-value, probably because we are violating the assumptions that samples have to be independently and identically distributed (i.i.d.):
+```{r}
+m0 = lm(CD14 ~ 1, flow_df_genotype)
+m1 = lm(CD14 ~ rs778587, flow_df_genotype)
+#Likelihood ratio test:
+anova(m0, m1, test = "LRT")$`Pr(>Chi)`
+#F-test:
+anova(m0, m1)$`Pr(>F)`
+```
+
+If we try to fit both genotype and line_id as fixed effects, then this fails, because the number of parameters exceeds the numner of samples:
+```{r}
+m0 = lm(CD14 ~ line_id + as.factor(flow_date), flow_df_genotype)
+m1 = lm(CD14 ~ rs778587 + line_id + as.factor(flow_date), flow_df_genotype)
+#Likelihood ratio test:
+anova(m0, m1, test = "LRT")$`Pr(>Chi)`
+#F-test:
+anova(m0, m1)$`Pr(>F)`
+#Model coefficients
+m1$coefficients
+```
+
+
+
+
+

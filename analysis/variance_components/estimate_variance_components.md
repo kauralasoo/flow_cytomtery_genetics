@@ -10,7 +10,7 @@ output:
 
 
 
-In this tutoral, we are going to use linear mixed models implemented in the lme4 R package to estimate the proportion of variance in a dataset that can be attributed to different experimental and biological factors. More concretely, we want to estimate which has larger effect on CD14 cell surface expression in human iPSC-derived macrophages - the date when the measurement was made or the cell line from which the cells originated? 
+In this tutoral, we are going to use linear mixed model (aka hierarchical model) implemented in the lme4 R package to estimate the proportion of variance in a dataset that can be attributed to different experimental and biological factors. More concretely, we want to estimate which has larger effect on CD14 protein cell surface expression in human iPSC-derived macrophages - the date when the measurement was made or the cell line which the cells originated from? 
 
 First, we need to load the packages that are used in the analysis.
 
@@ -25,7 +25,7 @@ library("MatrixEQTL")
 We also need to define a function that calculates the percentage of variance explained by each term in the linear mixed model. We will use it later:
 
 ```r
-#' Calculate the proportion of variance explaned by different factors in a lme4 model
+# Calculate the proportion of variance explaned by different factors in a lme4 model
 varianceExplained <- function(lmer_model){
   variance = as.data.frame(lme4::VarCorr(lmer_model))
   var_percent = dplyr::mutate(variance, percent_variance = vcov/sum(vcov)) %>% 
@@ -53,6 +53,11 @@ channel_marker_map = data_frame(channel = c("APC.A","PE.A","Pacific.Blue.A"),
                                 protein_name = c("CD206","CD16","CD14"))
 ```
 
+```
+## Warning: `data_frame()` is deprecated, use `tibble()`.
+## This warning is displayed once per session.
+```
+
 Finally, we can calculate the relative flourecent intensity values for all three proteins in each sample:
 
 ```r
@@ -70,6 +75,29 @@ intensity_matrix = dplyr::select(flow_data, line_id, genotype_id, flow_date, pro
   dplyr::mutate(sample_id = paste(line_id, as.character(flow_date), sep = "_"))
 ```
 
+This is what the processed data looks like:
+
+```r
+intensity_matrix
+```
+
+```
+## # A tibble: 121 x 7
+##    line_id genotype_id      flow_date   CD14  CD16 CD206 sample_id        
+##    <chr>   <chr>            <date>     <dbl> <dbl> <dbl> <chr>            
+##  1 aipt_2  HPSI0513i-aipt_2 2014-06-16 1.71  1.06  2.29  aipt_2_2014-06-16
+##  2 aipt_2  HPSI0513i-aipt_2 2014-06-20 1.70  1.20  2.20  aipt_2_2014-06-20
+##  3 auim_2  HPSI0613i-auim_2 2014-11-18 0.572 0.252 0.980 auim_2_2014-11-18
+##  4 auim_2  HPSI0613i-auim_2 2014-11-21 1.16  0.466 1.74  auim_2_2014-11-21
+##  5 babk_2  HPSI1213i-babk_2 2014-12-16 1.19  1.75  1.63  babk_2_2014-12-16
+##  6 babk_2  HPSI1213i-babk_2 2015-11-27 0.886 2.01  0.565 babk_2_2015-11-27
+##  7 bezi_1  HPSI0114i-bezi_1 2015-07-21 1.34  1.61  1.11  bezi_1_2015-07-21
+##  8 bezi_1  HPSI0114i-bezi_1 2015-07-30 1.49  1.45  1.62  bezi_1_2015-07-30
+##  9 bezi_1  HPSI0114i-bezi_1 2015-08-05 1.42  1.85  1.47  bezi_1_2015-08-05
+## 10 bima_1  HPSI1113i-bima_1 2014-12-16 0.905 0.986 1.53  bima_1_2014-12-16
+## # … with 111 more rows
+```
+
 ## Detecting outliers
 We can use principal component analysis to identify potential outlier samples:
 
@@ -84,9 +112,9 @@ pca_df = dplyr::mutate(as.data.frame(pca_res$x), sample_id = rownames(pca_res$x)
 ggplot(pca_df, aes(x = PC1, y = PC2, label = sample_id)) + geom_point() + geom_text()
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
 
-After closer inspection, it seems that there are two potential outlier samples. Let's remove those. Note that this step is somewhat subjective and you should make sure that you are not unintentionally skewing your results. One option is to rerun your analysis without removing outliers and checking how the results change.
+After closer inspection, it seems that there are two potential outliers. Let's remove those. Note that this step is somewhat subjective and you should make sure that you are not unintentionally skewing your results. One option is to re-run your analysis without removing outliers and checking how the results change.
 
 ```r
 #Choose outliers based on PCA and remove them
@@ -104,7 +132,7 @@ date_count = dplyr::group_by(flow_df_filtered, flow_date) %>%
 ggplot(date_count, aes(x = n_samples)) + geom_histogram(binwidth = 1)
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
 
 ### What is the number of replicates per cell line?
 
@@ -114,7 +142,7 @@ replicates_count = dplyr::group_by(flow_df_filtered, line_id) %>%
 ggplot(replicates_count, aes(x = n_replicates)) + geom_histogram(binwidth = 1)
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
 
 ## Visualising sources of variation
 First, let's plot the CD14 flourecent intensity according to the date when the meaurement was performed.
@@ -127,9 +155,21 @@ ggplot(flow_df_filtered, aes(x = as.factor(flow_date), y = CD14)) +
   xlab("Measurement date")
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
 
-Now, let's group the samples accoring to the cell line that they come from and redo the plot. To make the plot easier to read, we should keep only the cell lines that had more than one sample.
+Now, let's group the samples accoring to the cell line (line_id) that they come from and redo the plot.
+
+```r
+ggplot(flow_df_filtered, aes(x = line_id, y = CD14)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylab("CD14 flourecent intensity") +
+  xlab("Name of the cell line")
+```
+
+![](estimate_variance_components_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
+
+To make the plot a bit easier to read, we can keep only the cell lines that were measured more than once.
 
 ```r
 replicated_donors = dplyr::group_by(flow_df_filtered, line_id) %>% 
@@ -138,7 +178,7 @@ replicated_donors = dplyr::group_by(flow_df_filtered, line_id) %>%
 flow_df_replicated = dplyr::filter(flow_df_filtered, line_id %in% replicated_donors$line_id)
 ```
 
-Now, we can make the same plot as above, but group the intensities according to the line_id:
+Now, we can  redo the same plot again:
 
 ```r
 ggplot(flow_df_replicated, aes(x = line_id, y = CD14)) + 
@@ -148,9 +188,9 @@ ggplot(flow_df_replicated, aes(x = line_id, y = CD14)) +
   xlab("Name of the cell line")
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
 
-Based on these plots, which one do you think explains more variation in the data - the date of the experiment or the cell line of origin?
+Based on these plots, which one do you think explains more variation in the data - the date of the experiment or the cell line of origin? To me it seems that although the variation between dates seems to be mostly random, there's a clear pattern that multiple samples from the same cell line seem to be more similar to each other than two random samples from two different cell lines. In the following section we will tests this using statistical models.
 
 ## Variance component analysis
 Finally, let's use linear mixed model to estimate proportion of variance explained by the date of the experiment (flow_date) and the cell line of origin (line_id). 
@@ -160,7 +200,7 @@ cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_filtered) %>% v
 ```
 
 ```
-## singular fit
+## boundary (singular) fit: see ?isSingular
 ```
 
 ```r
@@ -179,7 +219,7 @@ cd14_variance_replicated = lmer(CD14 ~ (1|flow_date) + (1|line_id), flow_df_repl
 ```
 
 ```
-## singular fit
+## boundary (singular) fit: see ?isSingular
 ```
 
 ```r
@@ -484,7 +524,7 @@ results = runMatrixEQTL(flow_matrix, genotypes$genotypes, as.data.frame(genotype
 
 ## Visualising genetic associations
 
-One way to visualise genetic associations is to use the Manhattan plot where the position of the genetic variant is on the x-axis and the -log10 association p-value between the genetic variant and the phenotype (e.g. CD14 fluorescent intensity) is on the y-axis. To do this, we first need to add variant coordinates to the MatrixEQTL results table and filter for CD14 results:
+One way to visualise genetic associations is to use the *Manhattan plot* where the position of the genetic variant is on the x-axis and the -log10 association p-value between the genetic variant and the phenotype (e.g. CD14 fluorescent intensity) is on the y-axis. To do this, we first need to add variant coordinates to the MatrixEQTL results table and filter for CD14 results:
 
 ```r
   cd14_variants = dplyr::left_join(results$cis$eqtls, genotypes$snpspos, by = c("snps" = "snpid")) %>%
@@ -502,9 +542,9 @@ Next, we can use ggplot2 to make the Manhattan plot:
 ggplot(cd14_variants, aes(x = pos, y = -log(pvalue, 10))) + geom_point()
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-28-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-30-1.png)<!-- -->
 
-We can see that the variant with the smallest association p-value is rs778587 (although because of linkage disequilibrium, four other variants have exactly the same p-value):
+We can see that the variant with the smallest association p-value is rs778587 (although because of *linkage disequilibrium* (LD), four other variants have exactly the same p-value):
 
 ```r
 head(cd14_variants)
@@ -528,7 +568,7 @@ head(cd14_variants)
 ```
 
 # Revisiting variance compoent analysis
-Finally, we can check how incopororating the most associated genetic variant into the variance component analysis changes the results. Although the full genotype data is publicly available for only subset of the donors, we have added the genotypes of the lead CD14 variant (rs778587) for all of the donors into GitHub. First, let's import the genotypes and add them to the to flow dataset:
+Finally, we can check how incopororating the most associated genetic variant into the variance component analysis changes the results. Although the full genotype data is publicly available for only a subset of the donors, we have added the genotypes of the lead CD14 variant (rs778587) for all of the donors into GitHub. First, let's import the genotypes and add them to the to flow dataset:
 
 
 ```r
@@ -537,14 +577,14 @@ flow_df_genotype = dplyr::left_join(flow_df_filtered, cd14_lead_variant, by = "g
 ```
 
 
-Now, we can redo the variance component analysis and ask how much of the cell line specific variaition can be explained by the genetic variant that was most associated with CD14 expression.
+Now, we can redo the variance component analysis and ask how much of the cell-line-specific variation can be explained by the genetic variant that was most associated with CD14 expression.
 
 ```r
 cd14_variance = lmer(CD14 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% varianceExplained()
 ```
 
 ```
-## singular fit
+## boundary (singular) fit: see ?isSingular
 ```
 
 ```r
@@ -564,7 +604,7 @@ ggplot(flow_df_genotype, aes(x = factor(rs778587), y = CD14)) +
   geom_point(position = position_jitter(width = 0.1, height = 0))
 ```
 
-![](estimate_variance_components_files/figure-html/unnamed-chunk-32-1.png)<!-- -->
+![](estimate_variance_components_files/figure-html/unnamed-chunk-34-1.png)<!-- -->
 
 To make sure that this result is specific to CD14, we can also repeat the variance component analysis for CD16 and CD206:
 
@@ -573,7 +613,7 @@ lmer(CD16 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% va
 ```
 
 ```
-## singular fit
+## boundary (singular) fit: see ?isSingular
 ```
 
 ```
@@ -592,9 +632,11 @@ lmer(CD206 ~ (1|flow_date) + (1|line_id) + (1|rs778587), flow_df_genotype) %>% v
 As expected, the rs778587 variant near the CD14 gene does not explain any variation in the cell surface expression of CD16 and CD206 proteins.
 
 # Testing genotype effect using the linear mixed model
+
 One of the main advantages of a linear mixed model is that we can include related samples into out analysis to increase statistical power.
 
-#Unique donors
+# Unique donors
+
 For comparison, let's first create a dataset in which each individual occurs only once. This dataset contains 97 samples:
 
 ```r
@@ -604,22 +646,22 @@ unique_df_genotype
 
 ```
 ## # A tibble: 97 x 8
-##    line_id genotype_id   flow_date   CD14  CD16 CD206 sample_id   rs778587
-##    <chr>   <chr>         <date>     <dbl> <dbl> <dbl> <chr>          <int>
-##  1 aipt_2  HPSI0513i-ai… 2014-06-16 1.71  1.06  2.29  aipt_2_201…        0
-##  2 auim_2  HPSI0613i-au… 2014-11-18 0.572 0.252 0.980 auim_2_201…        2
-##  3 babk_2  HPSI1213i-ba… 2014-12-16 1.19  1.75  1.63  babk_2_201…        2
-##  4 bezi_1  HPSI0114i-be… 2015-07-21 1.34  1.61  1.11  bezi_1_201…        1
-##  5 bima_1  HPSI1113i-bi… 2014-12-16 0.905 0.986 1.53  bima_1_201…        2
-##  6 bubh_1  HPSI0314i-bu… 2015-04-13 1.42  2.33  1.27  bubh_1_201…        1
-##  7 bulb_1  HPSI0913i-bu… 2014-12-16 0.738 0.764 0.664 bulb_1_201…        1
-##  8 cehw_3  HPSI0513i-ce… 2014-11-18 1.23  1.94  1.44  cehw_3_201…        2
-##  9 cicb_3  HPSI0713i-ci… 2015-04-23 0.842 1.13  1.64  cicb_3_201…        2
-## 10 coio_2  HPSI0513i-co… 2014-11-18 1.18  0.681 1.30  coio_2_201…        0
-## # ... with 87 more rows
+##    line_id genotype_id   flow_date   CD14  CD16 CD206 sample_id    rs778587
+##    <chr>   <chr>         <date>     <dbl> <dbl> <dbl> <chr>           <int>
+##  1 aipt_2  HPSI0513i-ai… 2014-06-16 1.71  1.06  2.29  aipt_2_2014…        0
+##  2 auim_2  HPSI0613i-au… 2014-11-18 0.572 0.252 0.980 auim_2_2014…        2
+##  3 babk_2  HPSI1213i-ba… 2014-12-16 1.19  1.75  1.63  babk_2_2014…        2
+##  4 bezi_1  HPSI0114i-be… 2015-07-21 1.34  1.61  1.11  bezi_1_2015…        1
+##  5 bima_1  HPSI1113i-bi… 2014-12-16 0.905 0.986 1.53  bima_1_2014…        2
+##  6 bubh_1  HPSI0314i-bu… 2015-04-13 1.42  2.33  1.27  bubh_1_2015…        1
+##  7 bulb_1  HPSI0913i-bu… 2014-12-16 0.738 0.764 0.664 bulb_1_2014…        1
+##  8 cehw_3  HPSI0513i-ce… 2014-11-18 1.23  1.94  1.44  cehw_3_2014…        2
+##  9 cicb_3  HPSI0713i-ci… 2015-04-23 0.842 1.13  1.64  cicb_3_2015…        2
+## 10 coio_2  HPSI0513i-co… 2014-11-18 1.18  0.681 1.30  coio_2_2014…        0
+## # … with 87 more rows
 ```
 
-We can test the singificance of the genotype effect using both a liner model:
+We can test the singificance of the genotype effect using a liner model:
 
 ```r
 m0 = lm(CD14 ~ 1, unique_df_genotype)
@@ -640,7 +682,7 @@ anova(m0, m1)$`Pr(>F)`
 ```
 ## [1]           NA 3.705214e-14
 ```
-Ideally, we should also take into account flow_date. 
+Ideally, we should also take into account flow_date that would otherwise add some noise to the data.
 
 ```r
 m0 = lm(CD14 ~ 1 + as.factor(flow_date), unique_df_genotype)
@@ -661,7 +703,7 @@ anova(m0, m1)$`Pr(>F)`
 ```
 ## [1]           NA 2.848247e-10
 ```
-This reduced our power, because we now had to fit 31 parameters:
+This reduced our power, because we now had to fit 31 parameters (one for each date + interecept + genotype effect):
 
 ```r
 length(m1$coefficients)
@@ -672,17 +714,6 @@ length(m1$coefficients)
 ```
 
 We can perform the same test using a linear mixed model with genotype as a fixed effect and flow_date as a random effect:
-
-```r
-length(m1$coefficients)
-```
-
-```
-## [1] 31
-```
-
-
-And a linear mixed model with flow_date as a random effect:
 
 ```r
 m0 = lmer(CD14 ~ (1|flow_date), unique_df_genotype, REML = F)
@@ -696,7 +727,7 @@ anova(m0, m1)$`Pr(>Chisq)`
 ```
 
 ## Repeated measurements from the same individual
-We can also use the full dataset containing 119 samples.
+One advantage of linear mixed models is that we can also use the full dataset containing 119 samples.
 
 ```r
 flow_df_genotype
@@ -704,19 +735,19 @@ flow_df_genotype
 
 ```
 ## # A tibble: 119 x 8
-##    line_id genotype_id   flow_date   CD14  CD16 CD206 sample_id   rs778587
-##    <chr>   <chr>         <fct>      <dbl> <dbl> <dbl> <chr>          <int>
-##  1 aipt_2  HPSI0513i-ai… 2014-06-16 1.71  1.06  2.29  aipt_2_201…        0
-##  2 aipt_2  HPSI0513i-ai… 2014-06-20 1.70  1.20  2.20  aipt_2_201…        0
-##  3 auim_2  HPSI0613i-au… 2014-11-18 0.572 0.252 0.980 auim_2_201…        2
-##  4 auim_2  HPSI0613i-au… 2014-11-21 1.16  0.466 1.74  auim_2_201…        2
-##  5 babk_2  HPSI1213i-ba… 2014-12-16 1.19  1.75  1.63  babk_2_201…        2
-##  6 babk_2  HPSI1213i-ba… 2015-11-27 0.886 2.01  0.565 babk_2_201…        2
-##  7 bezi_1  HPSI0114i-be… 2015-07-21 1.34  1.61  1.11  bezi_1_201…        1
-##  8 bezi_1  HPSI0114i-be… 2015-07-30 1.49  1.45  1.62  bezi_1_201…        1
-##  9 bezi_1  HPSI0114i-be… 2015-08-05 1.42  1.85  1.47  bezi_1_201…        1
-## 10 bima_1  HPSI1113i-bi… 2014-12-16 0.905 0.986 1.53  bima_1_201…        2
-## # ... with 109 more rows
+##    line_id genotype_id    flow_date  CD14  CD16 CD206 sample_id    rs778587
+##    <chr>   <chr>          <fct>     <dbl> <dbl> <dbl> <chr>           <int>
+##  1 aipt_2  HPSI0513i-aip… 2014-06-… 1.71  1.06  2.29  aipt_2_2014…        0
+##  2 aipt_2  HPSI0513i-aip… 2014-06-… 1.70  1.20  2.20  aipt_2_2014…        0
+##  3 auim_2  HPSI0613i-aui… 2014-11-… 0.572 0.252 0.980 auim_2_2014…        2
+##  4 auim_2  HPSI0613i-aui… 2014-11-… 1.16  0.466 1.74  auim_2_2014…        2
+##  5 babk_2  HPSI1213i-bab… 2014-12-… 1.19  1.75  1.63  babk_2_2014…        2
+##  6 babk_2  HPSI1213i-bab… 2015-11-… 0.886 2.01  0.565 babk_2_2015…        2
+##  7 bezi_1  HPSI0114i-bez… 2015-07-… 1.34  1.61  1.11  bezi_1_2015…        1
+##  8 bezi_1  HPSI0114i-bez… 2015-07-… 1.49  1.45  1.62  bezi_1_2015…        1
+##  9 bezi_1  HPSI0114i-bez… 2015-08-… 1.42  1.85  1.47  bezi_1_2015…        1
+## 10 bima_1  HPSI1113i-bim… 2014-12-… 0.905 0.986 1.53  bima_1_2014…        2
+## # … with 109 more rows
 ```
 
 In this case we can fit a linear mixed model with genotype as a fixed effect and line_id and flow_date both as random effects.
@@ -726,7 +757,7 @@ m0 = lmer(CD14 ~ (1|line_id) + (1|flow_date), flow_df_genotype, REML = F)
 ```
 
 ```
-## singular fit
+## boundary (singular) fit: see ?isSingular
 ```
 
 ```r
@@ -734,7 +765,7 @@ m1 = lmer(CD14 ~ rs778587 + (1|line_id) + (1|flow_date), flow_df_genotype, REML 
 ```
 
 ```
-## singular fit
+## boundary (singular) fit: see ?isSingular
 ```
 
 ```r

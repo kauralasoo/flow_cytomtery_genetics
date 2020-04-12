@@ -1,0 +1,129 @@
+---
+title: "Fine mapping genetic associations"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+# Variance component analysis
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, warning=F}
+suppressMessages(library("dplyr"))
+suppressMessages(library("tidyr"))
+suppressMessages(library("ggplot2"))
+suppressMessages(library("devtools"))
+```
+
+Install the susieR R packages from GitHub:
+```{r, echo=TRUE, warning=F, message =F}
+devtools::install_github("stephenslab/susieR@0.9.0")
+```
+
+## Preparing the data
+
+First, we need to import the processed flow cytometry intensity values from the variance compoent analysis tutorial:
+
+```{r}
+intensity_matrix = readRDS("../../results/flow_intensity_matrix.rds")
+```
+
+This is what the processed data looks like. Right now, we are only interesed in the fluorescent intensity values for CD14 (column 4).
+
+```{r}
+intensity_matrix
+```
+
+
+Next, we can load the genotype matrix. The genotype data was initially stored in the VCF format and it was converted into an R matrix using the [this script](https://github.com/kauralasoo/flow_cytomtery_genetics/blob/master/analysis/preprocessing/importGenotypes.R).
+```{r}
+genotypes = readRDS("../../data/genotypes/open_access_genotypes.rds")
+```
+The command above loads in a list that has two components. The first one contains the coordinates of the genetic variants:
+```{r}
+head(genotypes$snpspos)
+```
+And the second one is a matrix that contain the genotypes (reference allele dosage) for each variant and cell line. If the reference allele is A and the alternate allele is T then individuals with AA genotype are represented with 2, individuals with AT genotype are represented by 1 and individuals with TT genotype are represented by 0.
+```{r}
+genotypes$genotypes[1:5,1:5]
+dim(genotypes$genotypes)
+```
+
+Finally, we need to prepare the flow cytometry data for association testing. This involves retaining only one (randomly selected) measurement for each cell line and retaining only cell lines for which open access genotype data is available. Also, we only keep the data for the CD14 protein.
+
+```{r}
+#keep one sample per donor
+unique_donor = dplyr::group_by(intensity_matrix, genotype_id) %>%
+  dplyr::filter(row_number() == 1) %>% dplyr::ungroup()
+flow_matrix = t(unique_donor[,c("CD14","CD16","CD206")])
+colnames(flow_matrix) = unique_donor$genotype_id
+
+#Keep only those donors that have open access genotype data
+cd14_intensity_vector = flow_matrix["CD14",colnames(genotypes$genotypes)]
+cd14_intensity_vector
+```
+
+We also need to filter the genotype data to only keep the genetic variants that are near the CD14 gene (on chromosome 5):
+
+```{r}
+cd14_variants = dplyr::filter(genotypes$snpspos, chr == "5")
+cd14_genotypes = genotypes$genotypes[cd14_variants$snpid,names(cd14_intensity_vector)]
+cd14_genotypes[1:5,1:5]
+dim(cd14_genotypes)
+```
+
+Since one of the variants happens to contain a missing value, me need to exclude this one also (fine mapping will not work otherwise). In a real analysis, we might want to impute this missing genotype.
+
+```{r}
+cd14_genotypes = cd14_genotypes[!(rowSums(is.na(cd14_genotypes)) > 0),]
+dim(cd14_genotypes)
+```
+
+# Statistical fine mapping using SuSiE
+
+First, let's standardise genotypes (subtract mean from each row) and transpose the genotype matrix so that individuals are in rows and genetic variant are in rows.
+```{r}
+standard_genotypes = t(cd14_genotypes - apply(cd14_genotypes, 1, mean))
+standard_genotypes[1:5,1:5]
+```
+
+Now we are ready to perform fine mapping:
+
+```{r}
+fitted <- susieR::susie(standard_genotypes, cd14_intensity_vector,
+                          verbose = TRUE,
+                          compute_univariate_zscore = TRUE)
+fitted$variant_id = colnames(standard_genotypes)
+```
+
+# Extract the variants belonging to the credible set
+```{r}
+credible_set = fitted$variant_id[fitted$sets$cs$L1]
+credible_set
+length(credible_set)
+```
+As we can see, SuSiE finds that with 95% probability, the causal variant is one of these 46 variants, reflecting the high number of genetic variants in high LD with the lead variant that you found in the previous homework.
+
+# Visualise the fine mapping results
+
+Exract SNP positions for the variants included in fine mapping:
+
+```{r}
+pos_tbl = dplyr::tibble(snpid = colnames(standard_genotypes)) %>% dplyr::left_join(genotypes$snpspos)
+```
+
+Visualise fine mapping results on top of -log10 p-values z-scores from univariate analysis:
+
+```{r}
+susieR::susie_plot(fitted, y = "z", pos = pos_tbl$pos)
+```
+
+Visualise posterior inclusion probability (PIP) for each variant directly
+
+```{r}
+susieR::susie_plot(fitted, y = "PIP", pos = pos_tbl$pos)
+```
+
+Variants included in the credible set are marked with green. Note that none of the PIP values are large, indicating the the model is not confident that any specifc variant in this region is causal, even though the z-scores on the previous plot indicate that tere is a very strong associaton in this region.

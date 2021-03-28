@@ -126,4 +126,4 @@ Visualise posterior inclusion probability (PIP) for each variant directly
 susieR::susie_plot(fitted, y = "PIP", pos = pos_tbl$pos)
 ```
 
-Variants included in the credible set are marked with green. Note that none of the PIP values are large, indicating the the model is not confident that any specifc variant in this region is causal, even though the z-scores on the previous plot indicate that tere is a very strong associaton in this region.
+Variants included in the credible set are marked with green. Note that none of the PIP values are large, indicating the the model is not confident that any specific variant in this region is causal, even though the z-scores on the previous plot indicate that there is a very strong associaton in this region.

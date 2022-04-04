@@ -14,12 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 suppressMessages(library("dplyr"))
 suppressMessages(library("tidyr"))
 suppressMessages(library("ggplot2"))
-suppressMessages(library("devtools"))
-```
-
-Install the susieR R packages from GitHub:
-```{r, echo=TRUE, warning=F, message =F}
-devtools::install_github("stephenslab/susieR@0.9.0")
+suppressMessages(library("susieR"))
 ```
 
 ## Preparing the data
@@ -117,13 +112,13 @@ pos_tbl = dplyr::tibble(snpid = colnames(standard_genotypes)) %>% dplyr::left_jo
 Visualise fine mapping results on top of -log10 p-values z-scores from univariate analysis:
 
 ```{r}
-susieR::susie_plot(fitted, y = "z", pos = pos_tbl$pos)
+susieR::susie_plot(fitted, y = "z")
 ```
 
 Visualise posterior inclusion probability (PIP) for each variant directly
 
 ```{r}
-susieR::susie_plot(fitted, y = "PIP", pos = pos_tbl$pos)
+susieR::susie_plot(fitted, y = "PIP")
 ```
 
 Variants included in the credible set are marked with green. Note that none of the PIP values are large, indicating the the model is not confident that any specific variant in this region is causal, even though the z-scores on the previous plot indicate that there is a very strong association in this region.

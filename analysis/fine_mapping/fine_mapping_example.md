@@ -10,12 +10,6 @@ output:
 
 
 
-Install the susieR R packages from GitHub:
-
-```r
-devtools::install_github("stephenslab/susieR@0.9.0")
-```
-
 ## Preparing the data
 
 First, we need to import the processed flow cytometry intensity values from the variance compoent analysis tutorial:
@@ -33,7 +27,7 @@ intensity_matrix
 ```
 
 ```
-## # A tibble: 121 x 7
+## # A tibble: 121 × 7
 ##    line_id genotype_id      flow_date   CD14  CD16 CD206 sample_id        
 ##    <chr>   <chr>            <date>     <dbl> <dbl> <dbl> <chr>            
 ##  1 aipt_2  HPSI0513i-aipt_2 2014-06-16 1.71  1.06  2.29  aipt_2_2014-06-16
@@ -62,7 +56,7 @@ head(genotypes$snpspos)
 ```
 
 ```
-## # A tibble: 6 x 3
+## # A tibble: 6 × 3
 ##   snpid      chr         pos
 ##   <chr>      <chr>     <int>
 ## 1 rs13188297 5     140133794
@@ -79,18 +73,18 @@ genotypes$genotypes[1:5,1:5]
 ```
 
 ```
-##            HPSI0114i-bezi_1 HPSI0114i-eipl_1 HPSI0114i-fikt_3
-## rs13188297                2                2                2
-## rs13156549                2                1                2
-## rs269783                  2                2                1
-## rs156095                  0                1                1
-## rs185123                  0                1                0
-##            HPSI0114i-iisa_3 HPSI0114i-joxm_1
-## rs13188297                1                2
-## rs13156549                1                2
-## rs269783                  2                1
-## rs156095                  0                1
-## rs185123                  0                0
+##            HPSI0114i-bezi_1 HPSI0114i-eipl_1 HPSI0114i-fikt_3 HPSI0114i-iisa_3
+## rs13188297                2                2                2                1
+## rs13156549                2                1                2                1
+## rs269783                  2                2                1                2
+## rs156095                  0                1                1                0
+## rs185123                  0                1                0                0
+##            HPSI0114i-joxm_1
+## rs13188297                2
+## rs13156549                2
+## rs269783                  1
+## rs156095                  1
+## rs185123                  0
 ```
 
 ```r
@@ -149,18 +143,18 @@ cd14_genotypes[1:5,1:5]
 ```
 
 ```
-##            HPSI0114i-bezi_1 HPSI0114i-eipl_1 HPSI0114i-fikt_3
-## rs13188297                2                2                2
-## rs13156549                2                1                2
-## rs269783                  2                2                1
-## rs156095                  0                1                1
-## rs185123                  0                1                0
-##            HPSI0114i-iisa_3 HPSI0114i-joxm_1
-## rs13188297                1                2
-## rs13156549                1                2
-## rs269783                  2                1
-## rs156095                  0                1
-## rs185123                  0                0
+##            HPSI0114i-bezi_1 HPSI0114i-eipl_1 HPSI0114i-fikt_3 HPSI0114i-iisa_3
+## rs13188297                2                2                2                1
+## rs13156549                2                1                2                1
+## rs269783                  2                2                1                2
+## rs156095                  0                1                1                0
+## rs185123                  0                1                0                0
+##            HPSI0114i-joxm_1
+## rs13188297                2
+## rs13156549                2
+## rs269783                  1
+## rs156095                  1
+## rs185123                  0
 ```
 
 ```r
@@ -211,17 +205,21 @@ fitted <- susieR::susie(standard_genotypes, cd14_intensity_vector,
 ```
 
 ```
-## [1] "objective:4.6503203977023"
-## [1] "objective:9.33070272105073"
-## [1] "objective:9.90449476338386"
-## [1] "objective:9.99254026937473"
-## [1] "objective:10.0177854477139"
-## [1] "objective:10.0208631909704"
-## [1] "objective:10.0285334294403"
-## [1] "objective:10.0288555730711"
-## [1] "objective:10.0304724613254"
-## [1] "objective:10.0305228644133"
-## [1] "objective:10.0308374604745"
+## For an X with many columns, please consider installing  the Rfast package for more efficient credible set (CS)  calculations.
+```
+
+```
+## [1] "objective:4.65032039770232"
+## [1] "objective:9.3307027210506"
+## [1] "objective:9.90449476181859"
+## [1] "objective:9.99254026696784"
+## [1] "objective:10.0177854477985"
+## [1] "objective:10.0208631912315"
+## [1] "objective:10.0285334294726"
+## [1] "objective:10.028855573103"
+## [1] "objective:10.0304724616306"
+## [1] "objective:10.0305228648284"
+## [1] "objective:10.0308374606489"
 ```
 
 ```r
@@ -274,18 +272,18 @@ Visualise fine mapping results on top of -log10 p-values z-scores from univariat
 
 
 ```r
-susieR::susie_plot(fitted, y = "z", pos = pos_tbl$pos)
+susieR::susie_plot(fitted, y = "z")
 ```
 
-![](fine_mapping_example_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
+![](fine_mapping_example_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
 
 Visualise posterior inclusion probability (PIP) for each variant directly
 
 
 ```r
-susieR::susie_plot(fitted, y = "PIP", pos = pos_tbl$pos)
+susieR::susie_plot(fitted, y = "PIP")
 ```
 
-![](fine_mapping_example_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
+![](fine_mapping_example_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
 
-Variants included in the credible set are marked with green. Note that none of the PIP values are large, indicating the the model is not confident that any specifc variant in this region is causal, even though the z-scores on the previous plot indicate that tere is a very strong associaton in this region.
+Variants included in the credible set are marked with green. Note that none of the PIP values are large, indicating the the model is not confident that any specific variant in this region is causal, even though the z-scores on the previous plot indicate that there is a very strong association in this region.
